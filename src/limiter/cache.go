@@ -1,11 +1,10 @@
-package redis
+package limiter
 
 import (
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/filter"
 	"golang.org/x/net/context"
-
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
-	"github.com/lyft/ratelimit/src/config"
-	"github.com/lyft/ratelimit/src/filter"
 )
 
 // Interface for a time source.
@@ -39,5 +38,7 @@ type RateLimitCache interface {
 		limits []*config.RateLimit,
 		forceFlag bool,
 		ipFilter filter.Filter,
-		uidFilter filter.Filter) []*pb.RateLimitResponse_DescriptorStatus
+		uidFilter filter.Filter,
+		onlyLogOnLimit bool,
+	) []*pb.RateLimitResponse_DescriptorStatus
 }

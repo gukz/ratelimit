@@ -4,16 +4,16 @@ import (
 	"strings"
 	"sync"
 
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	"github.com/envoyproxy/ratelimit/src/assert"
+	"github.com/envoyproxy/ratelimit/src/config"
+	"github.com/envoyproxy/ratelimit/src/limiter"
+	"github.com/envoyproxy/ratelimit/src/redis"
+	"github.com/envoyproxy/ratelimit/src/settings"
 	"github.com/lyft/goruntime/loader"
-	"github.com/lyft/gostats"
+	stats "github.com/lyft/gostats"
 	logger "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
-
-	pb "github.com/lyft/ratelimit/proto/envoy/service/ratelimit/v2"
-	"github.com/lyft/ratelimit/src/assert"
-	"github.com/lyft/ratelimit/src/config"
-	"github.com/lyft/ratelimit/src/redis"
-	"github.com/lyft/ratelimit/src/settings"
 )
 
 type shouldRateLimitStats struct {
@@ -54,7 +54,7 @@ type service struct {
 	configLoader       config.RateLimitConfigLoader
 	config             config.RateLimitConfig
 	runtimeUpdateEvent chan int
-	cache              redis.RateLimitCache
+	cache              limiter.RateLimitCache
 	stats              serviceStats
 	rlStatsScope       stats.Scope
 	legacy             *legacyService
@@ -117,7 +117,7 @@ func (this *service) shouldRateLimitWorker(
 	}
 
 	s := settings.NewSettings()
-	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck, s.ForceFlag, s.IPFilter, s.UIDFilter)
+	responseDescriptorStatuses := this.cache.DoLimit(ctx, request, limitsToCheck, s.ForceFlag, s.IPFilter, s.UIDFilter, s.OnlyLogOnLimit)
 	assert.Assert(len(limitsToCheck) == len(responseDescriptorStatuses))
 
 	response := &pb.RateLimitResponse{}
@@ -163,7 +163,7 @@ func (this *service) ShouldRateLimit(
 	}()
 	logger.Debugf("Received request %s", request.String())
 	response := this.shouldRateLimitWorker(ctx, request)
-	logger.Debugf("returning normal response")
+	logger.Debugf("returning normal new response")
 	return response, nil
 }
 
@@ -177,7 +177,7 @@ func (this *service) GetCurrentConfig() config.RateLimitConfig {
 	return this.config
 }
 
-func NewService(runtime loader.IFace, cache redis.RateLimitCache,
+func NewService(runtime loader.IFace, cache limiter.RateLimitCache,
 	configLoader config.RateLimitConfigLoader, stats stats.Scope) RateLimitServiceServer {
 
 	newService := &service{
